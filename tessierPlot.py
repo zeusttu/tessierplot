@@ -205,13 +205,13 @@ def scanplot(file, fig=None, n_index=None, style=[], data=None, **kwargs):
 
 		measAxisDesignation = parseUnitAndNameFromColumnName(filtereddata.keys()[-1])
 
-		wrap = tstyle.getEmptyWrap()
+		wrap = tstyle.TessierWrap()
 		#put in the last column, the 'measured' value so to say
-		wrap['XX'] = filtereddata.iloc[:,-1]
+		wrap.XX = filtereddata.iloc[:,-1]
 		for st in style:
 			st.execute(wrap)
 
-		p = plt.plot(filtereddata.iloc[:,-2],wrap['XX'],label=title,**kwargs)
+		p = plt.plot(filtereddata.iloc[:,-2],wrap.XX,label=title,**kwargs)
 
 	plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), loc=3,
 		   ncol=2, mode="expand", borderaxespad=0.)
@@ -496,16 +496,19 @@ class plot3DSlices:
 			cbar_unit = measAxisDesignation[1]
 			cbar_trans = [] #trascendental tracer :P For keeping track of logs and stuff
 
-			w = {'ext':ext, 'ystep':ystep,'XX': XX, 'cbar_quantity': cbar_quantity, 'cbar_unit': cbar_unit, 'cbar_trans':cbar_trans, 'flipaxes': False, 'has_title': True}
+			w = tstyle.TessierWrap(
+					ext=ext, ystep=ystep, XX=XX, cbar_quantity=cbar_quantity,
+					cbar_unit=cbar_unit, cbar_trans=cbar_trans,
+					flipaxes=False, has_title=True)
 			for st in style:
 				st.execute(w)
 
 			#unwrap
-			ext = w['ext']
-			XX = w['XX']
-			cbar_trans_formatted = ''.join([''.join(s+'(') for s in w['cbar_trans']])
-			cbar_title = cbar_trans_formatted + w['cbar_quantity'] + ' (' + w['cbar_unit'] + ')'
-			if len(w['cbar_trans']) is not 0:
+			ext = w.ext
+			XX = w.XX
+			cbar_trans_formatted = ''.join([''.join(s+'(') for s in w.cbar_trans])
+			cbar_title = cbar_trans_formatted + w.cbar_quantity + ' (' + w.cbar_unit + ')'
+			if len(w.cbar_trans) is not 0:
 				cbar_title = cbar_title + ')'
 
 			#postrotate np.rot90
@@ -514,18 +517,18 @@ class plot3DSlices:
 			if 'deinterXXodd' in w: # If deinterlace style is used
 				self.fig = plt.figure()
 				ax_deinter_odd  = plt.subplot(2, 1, 1)
-				w['deinterXXodd'] = np.rot90(w['deinterXXodd'])
-				ax_deinter_odd.imshow(w['deinterXXodd'],extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
+				w.deinterXXodd = np.rot90(w.deinterXXodd)
+				ax_deinter_odd.imshow(w.deinterXXodd,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
 
 				ax_deinter_even = plt.subplot(2, 1, 2)
-				w['deinterXXeven'] = np.rot90(w['deinterXXeven'])
-				ax_deinter_even.imshow(w['deinterXXeven'],extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
+				w.deinterXXeven = np.rot90(w.deinterXXeven)
+				ax_deinter_even.imshow(w.deinterXXeven,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
 
-			self.im = ax.imshow(XX,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation, norm=w['imshow_norm'])
+			self.im = ax.imshow(XX,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation, norm=w.imshow_norm)
 			if clim != (0,0):
 			   self.im.set_clim(clim)
 
-			if w['flipaxes']:
+			if w.flipaxes:
 				ax.set_xlabel(cols[-2])
 				ax.set_ylabel(cols[-3])
 			else:
@@ -537,7 +540,7 @@ class plot3DSlices:
 			for i in uniques_col_str:
 				title = '\n'.join([title, '{:s}: {:g} (mV)'.format(i,getattr(slicy,i).iloc[0])])
 			print(title)
-			if w['has_title']:
+			if w.has_title:
 				ax.set_title(title)
 			# create an axes on the right side of ax. The width of cax will be 5%
 			# of ax and the padding between cax and ax will be fixed at 0.05 inch.

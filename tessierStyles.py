@@ -47,8 +47,8 @@ def moving_average_2d(data, window):
 class Deinterlace(TessierStyle):
 	'''Tessier style for deinterlacing a measurement'''
 	def execute(self, w):
-		w['deinterXXodd'] = w['XX'][1::2,1:]
-		w['deinterXXeven'] = w['XX'][::2,:]
+		w.deinterXXodd = w.XX[1::2,1:]
+		w.deinterXXeven = w.XX[::2,:]
 
 class SmoothingFilter(TessierStyle):
 	'''Tessier style for smoothing with a custom linear filter'''
@@ -56,7 +56,7 @@ class SmoothingFilter(TessierStyle):
 		self.win = win
 
 	def execute(self, w):
-		w['XX'] = moving_average_2d(w['XX'], self.win)
+		w.XX = moving_average_2d(w.XX, self.win)
 
 class MovAvg(SmoothingFilter):
 	'''Tessier style for moving average smoothing'''
@@ -69,7 +69,7 @@ class SavGol(TessierStyle):
 		(self.samples, self.order) = (int(samples), int(order))
 
 	def execute(self, w):
-		w['XX'] = signal.savgol_filter(w['XX'], self.samples, self.order)
+		w.XX = signal.savgol_filter(w.XX, self.samples, self.order)
 
 class DIDV(TessierStyle):
 	'''Tessier style for taking a derivative'''
@@ -79,8 +79,8 @@ class DIDV(TessierStyle):
 				axis, float(scale), quantity, unit)
 
 	def execute(self, w):
-		w['XX'] = np.diff(w['XX'], axis=self.axis) * self.scale / w['ystep']
-		(w['cbar_quantity'], w['cbar_unit']) = (self.quantity, self.unit)
+		w.XX = np.diff(w.XX, axis=self.axis) * self.scale / w.ystep
+		(w.cbar_quantity, w.cbar_unit) = (self.quantity, self.unit)
 
 class DIDV_Conductancequantum(DIDV):
 	'''DIDV style converting to conductance quantum'''
@@ -94,8 +94,8 @@ class Logscale(TessierStyle):
 	of each value
 	'''
 	def execute(self, w):
-		w['XX'] = np.log10(np.abs(w['XX']))
-		w['cbar_trans'] = ['log$_{10}$','abs'] + w['cbar_trans']
+		w.XX = np.log10(np.abs(w.XX))
+		w.cbar_trans = ['log$_{10}$','abs'] + w.cbar_trans
 
 class FancyLogscale(TessierStyle):
 	'''
@@ -112,36 +112,42 @@ class FancyLogscale(TessierStyle):
 		(self.cmin, self.cmax) = (cmin, cmax)
 
 	def execute(self, w):
-		w['XX'] = abs(w['XX'])
+		w.XX = abs(w.XX)
 		if self.cmin is None:
-			self.cmin = w['XX'].min()
+			self.cmin = w.XX.min()
 		if self.cmin == 0:
-			self.cmin = 0.1 * nonzeromin(w['XX'])
+			self.cmin = 0.1 * nonzeromin(w.XX)
 		if self.cmax is None:
-			self.cmax = w['XX'].max()
-		w['imshow_norm'] = mplc.LogNorm(vmin=self.cmin, vmax=self.cmax)
+			self.cmax = w.XX.max()
+		w.imshow_norm = mplc.LogNorm(vmin=self.cmin, vmax=self.cmax)
 
 class Abs(TessierStyle):
 	'''Tessier style for taking the absolute value of each value'''
 	def execute(self, w):
-		w['XX'] = np.abs(w['XX'])
-		w['cbar_trans'] = ['abs'] + w['cbar_trans']
+		w.XX = np.abs(w.XX)
+		w.cbar_trans = ['abs'] + w.cbar_trans
 
 class Flipaxes(TessierStyle):
 	'''Tessier style for flipping the X and Y axes'''
 	def execute(self, w):
-		w['XX'] = np.transpose( w['XX'])
-		w['ext'] = (w['ext'][2],w['ext'][3],w['ext'][0],w['ext'][1])
-		w['flipaxes'] = True
+		w.XX = np.transpose( w.XX)
+		w.ext = (w.ext[2],w.ext[3],w.ext[0],w.ext[1])
+		w.flipaxes = True
 
 class NoTitle(TessierStyle):
 	'''Style to not display a title'''
 	def execute(self, w):
-		w['has_title'] = False
+		w.has_title = False
 
 
-def getEmptyWrap():
-	'''Get empty wrap with default parameter values'''
-	w = {'ext':(0,0,0,0), 'ystep':1, 'XX': [], 'cbar_quantity': '', 'cbar_unit': 'a.u.', 'cbar_trans': [], 'imshow_norm': None, 'flipaxes': False, 'has_title': True}
-	return w
+class TessierWrap():
+	'''Get wrap with (default) parameter values'''
+	def __init__(self, **kwargs):
+		# Default values
+		self.__dict__.update({
+				'ext':(0,0,0,0), 'ystep':1, 'XX': [], 'cbar_quantity': '',
+				'cbar_unit': 'a.u.', 'cbar_trans': [], 'imshow_norm': None,
+				'flipaxes': False, 'has_title': True})
+		# Values passed to constructor (optional)
+		self.__dict__.update(kwargs)
 
