@@ -1,11 +1,16 @@
 import numpy as np
 from scipy import signal
-import re
-import collections
 import matplotlib.colors as mplc
 
-REGEX_STYLE_WITH_PARAMS = re.compile('(.+)\((.+)\)')
-REGEX_VARVALPAIR = re.compile('(\w+)=(\w+)')
+USIEMENS_PER_CONDUCTANCE_QUANTUM = 0.0129064037
+
+class TessierStyle:
+	'''All TessierPlot styles (plugins) should extend this class'''
+	def __init__(self):
+		pass
+
+	def execute(self, w):
+		raise NotImplementedError()
 
 def nonzeromin(x):
 	'''
@@ -13,7 +18,7 @@ def nonzeromin(x):
 	Also works recursively for multi-dimensional arrays
 	Returns None if no non-zero values are found
 	'''
-	x = numpy.array(x)
+	x = np.array(x)
 	nzm = None
 	if len(x.shape) > 1:
 		for i in range(x.shape[0]):
@@ -26,182 +31,117 @@ def nonzeromin(x):
 				nzm = x[i]
 	return nzm
 
-def helper_deinterlace(w):
-	w['deinterXXodd'] = w['XX'][1::2,1:] #take every other column in a sweepback measurement, offset 1
-	w['deinterXXeven'] = w['XX'][::2,:] #offset 0
-	#w.deinterXXodd  = w.deinterXXodd
-	#w.deinterXXeven = w.deinterXXeven
+def moving_average_2d(data, window):
+	"""Moving average on two-dimensional data."""
+	# Makes sure that the window function is normalized.
+	window /= window.sum()
+	# Makes sure data array is a numpy array or masked array.
+	if type(data).__name__ not in ['ndarray', 'MaskedArray']:
+		data = np.asarray(data)
 
-def helper_mov_avg(w):
-	(m, n) = (int(w['mov_avg_m']), int(w['mov_avg_n']))     # The shape of the window array
-	win = np.ones((m, n))
-	#win = signal.kaiser(m,8.6,sym=False)
-	w['XX'] = moving_average_2d(w['XX'], win)
+	# The output array has the same dimensions as the input data
+	# (mode='same') and symmetrical boundary conditions are assumed
+	# (boundary='symm').
+	return signal.convolve2d(data, window, mode='same', boundary='symm')
 
-def helper_savgol(w):
-	'''Perform Savitzky-Golay smoothing'''
-	w['XX'] = signal.savgol_filter(
-			w['XX'], int(w['savgol_samples']), int(w['savgol_order']))
+class Deinterlace(TessierStyle):
+	'''Tessier style for deinterlacing a measurement'''
+	def execute(self, w):
+		w['deinterXXodd'] = w['XX'][1::2,1:]
+		w['deinterXXeven'] = w['XX'][::2,:]
 
-def helper_didv(w):
-	w['XX'] = np.diff(w['XX'],axis=1)
-	#1 nA / 1 mV = 0.0129064037 conductance quanta
-	w['XX'] = w['XX'] / w['ystep'] * 0.0129064037
-	w['cbar_quantity'] = 'dI/dV'
-	w['cbar_unit'] = '$\mu$Siemens'
-	w['cbar_unit'] = r'$\mathrm{e}^2/\mathrm{h}$'
+class SmoothingFilter(TessierStyle):
+	'''Tessier style for smoothing with a custom linear filter'''
+	def __init__(self, win):
+		self.win = win
 
-def helper_log(w):
-	w['XX'] = np.log10(np.abs(w['XX']))
-	w['cbar_trans'] = ['log$_{10}$','abs'] + w['cbar_trans']
-	w['cbar_quantity'] = w['cbar_quantity']
-	w['cbar_unit'] = w['cbar_unit']
+	def execute(self, w):
+		w['XX'] = moving_average_2d(w['XX'], self.win)
 
-def helper_logy(w):
-	w['XX'] = np.log10(np.abs(w['XX']))
-	w['cbar_trans'] = ['log$_{10}$','abs'] + w['cbar_trans']
-	w['cbar_quantity'] = w['cbar_quantity']
-	w['cbar_unit'] = w['cbar_unit']
+class MovAvg(SmoothingFilter):
+	'''Tessier style for moving average smoothing'''
+	def __init__(self, m=1, n=5):
+		SmoothingFilter.__init__(self, np.ones((m, n)))
 
-def helper_fancylog(w):
+class SavGol(TessierStyle):
+	'''Tessier style for Savitzky-Golay smoothing'''
+	def __init__(self, samples=3, order=1):
+		(self.samples, self.order) = (int(samples), int(order))
+
+	def execute(self, w):
+		w['XX'] = signal.savgol_filter(w['XX'], self.samples, self.order)
+
+class DIDV(TessierStyle):
+	'''Tessier style for taking a derivative'''
+	def __init__(self, axis=1, scale=1.,
+			quantity='dI/dV', unit='$\mu$Siemens'):
+		(self.axis, self.scale, self.quantity, self.unit) = (
+				axis, float(scale), quantity, unit)
+
+	def execute(self, w):
+		w['XX'] = np.diff(w['XX'], axis=self.axis) * self.scale / w['ystep']
+		(w['cbar_quantity'], w['cbar_unit']) = (self.quantity, self.unit)
+
+class DIDV_Conductancequantum(DIDV):
+	'''DIDV style converting to conductance quantum'''
+	def __init__(self, axis=1, quantity='dI/dV'):
+		DIDV.__init__(self, axis, USIEMENS_PER_CONDUCTANCE_QUANTUM,
+				quantity, '$\mathrm{e}^2/\mathrm{h}$')
+
+class Logscale(TessierStyle):
 	'''
-	Use a logarithmic normalising function for plotting.
-	This might be incompatible with Fiddle.
+	Tessier style for taking the base-10 logarithm of the absolute value
+	of each value
 	'''
-	w['XX'] = abs(w['XX'])
-	(cmin, cmax) = (w['fancylog_cmin'], w['fancylog_cmax'])
-	if type(cmin) is str:
-		cmin = float(cmin)
-	if type(cmax) is str:
-		cmax = float(cmax)
-	if cmin is None:
-		cmin = w['XX'].min()
-		if cmin == 0:
-			cmin = 0.1 * nonzeromin(w['XX'])
-	if cmax is None:
-		cmax = w['XX'].max()
-	w['imshow_norm'] = mplc.LogNorm(vmin=cmin, vmax=cmax)
+	def execute(self, w):
+		w['XX'] = np.log10(np.abs(w['XX']))
+		w['cbar_trans'] = ['log$_{10}$','abs'] + w['cbar_trans']
 
-def helper_normal(w):
-	w['XX'] = w['XX']
+class FancyLogscale(TessierStyle):
+	'''
+	Tessier style for taking the absolute value of each value and
+	using a logarithmic normalising function, resulting in a fancy
+	logarithmic colorbar.
+	This style might be incompatible with Fiddle.
+	'''
+	def __init__(self, cmin=None, cmax=None):
+		if type(cmin) is str:
+			cmin = float(cmin)
+		if type(cmax) is str:
+			cmax = float(cmax)
+		(self.cmin, self.cmax) = (cmin, cmax)
 
-def helper_abs(w):
-	w['XX'] = np.abs(w['XX'])
-	w['cbar_trans'] = ['abs'] + w['cbar_trans']
-	w['cbar_quantity'] = w['cbar_quantity']
-	w['cbar_unit'] = w['cbar_unit']
+	def execute(self, w):
+		w['XX'] = abs(w['XX'])
+		if self.cmin is None:
+			self.cmin = w['XX'].min()
+		if self.cmin == 0:
+			self.cmin = 0.1 * nonzeromin(w['XX'])
+		if self.cmax is None:
+			self.cmax = w['XX'].max()
+		w['imshow_norm'] = mplc.LogNorm(vmin=self.cmin, vmax=self.cmax)
 
-def helper_flipaxes(w):
-	w['XX'] = np.transpose( w['XX'])
-	w['ext'] = (w['ext'][2],w['ext'][3],w['ext'][0],w['ext'][1])
+class Abs(TessierStyle):
+	'''Tessier style for taking the absolute value of each value'''
+	def execute(self, w):
+		w['XX'] = np.abs(w['XX'])
+		w['cbar_trans'] = ['abs'] + w['cbar_trans']
 
-STYLE_FUNCS = {
-	'deinterlace': helper_deinterlace,
-	'didv': helper_didv,
-	'log': helper_log,
-	'normal': helper_normal,
-	'flipaxes': helper_flipaxes,
-	'mov_avg': helper_mov_avg,
-	'abs': helper_abs,
-	'savgol': helper_savgol,
-	'fancylog': helper_fancylog
-}
+class Flipaxes(TessierStyle):
+	'''Tessier style for flipping the X and Y axes'''
+	def execute(self, w):
+		w['XX'] = np.transpose( w['XX'])
+		w['ext'] = (w['ext'][2],w['ext'][3],w['ext'][0],w['ext'][1])
+		w['flipaxes'] = True
 
-'''
-Specification of styles with arguments
-Format:
-	{'<style_name>': {'<param_name>': <default_value>, 'param_order': order}}
-Multiple styles can be specified, multiple parameters (name-defaultvalue pairs)
-can be specified, and param_order decides the order in which they can be given
-as non-keyword arguments.
-'''
-STYLE_SPECS = {
-	'deinterlace': {'param_order': []},
-	'didv': {'param_order': []},
-	'log': {'param_order': []},
-	'normal': {'param_order': []},
-	'flipaxes': {'param_order': []},
-	'mov_avg': {'m': 1, 'n': 5, 'win': None, 'param_order': ['m', 'n', 'win']},
-	'abs': {'param_order': []},
-	'savgol': {'samples': 3, 'order': 1, 'param_order': ['samples', 'order']},
-	'fancylog': {'cmin': None, 'cmax': None, 'param_order': ['cmin', 'cmax']}
-}
+class NoTitle(TessierStyle):
+	'''Style to not display a title'''
+	def execute(self, w):
+		w['has_title'] = False
 
-#Backward compatibility
-styles = STYLE_FUNCS
 
 def getEmptyWrap():
 	'''Get empty wrap with default parameter values'''
-	w = {'ext':(0,0,0,0), 'ystep':1, 'XX': [], 'cbar_quantity': '', 'cbar_unit': 'a.u.', 'cbar_trans': [], 'imshow_norm': None}
+	w = {'ext':(0,0,0,0), 'ystep':1, 'XX': [], 'cbar_quantity': '', 'cbar_unit': 'a.u.', 'cbar_trans': [], 'imshow_norm': None, 'flipaxes': False, 'has_title': True}
 	return w
 
-def getPopulatedWrap(style=[]):
-	'''
-	Get wrap with populated values specified in the style list
-	For example, if styles is:
-		['deinterlace', 'mov_avg(n=5, 1)']
-	This will add the following to the wrap:
-		{'mov_avg_n': '5', 'mov_avg_m': '1'}
-	'''
-	w = getEmptyWrap()
-	if style is None:
-		return w
-	elif type(style) is not list:
-		style = list([style])
-	for s in style:
-		try:
-			# Parse, process keyword arguments and collect non-kw arguments
-			sregex = re.match(REGEX_STYLE_WITH_PARAMS, s)
-			spar = []
-			if sregex is not None:
-				(s, sparamstr) = sregex.group(1,2)
-				sparams = (
-						sparamstr.replace(';',',').replace(':','=')
-						.split(','))
-				for i in range(len(sparams)):
-					sparam = sparams[i].strip()
-					spregex = re.match(REGEX_VARVALPAIR, sparam)
-					if spregex is None:
-						spar.append(sparam)
-					else:
-						w['{:s}_{:s}'.format(s, spregex.group(1))] = spregex.group(2)
-			# Process non-keyword arguments and default values
-			(i, j) = (0, 0)
-			pnames = STYLE_SPECS[s]['param_order']
-			while i < len(pnames):
-				key = '{:s}_{:s}'.format(s, pnames[i])
-				if key not in w:
-					if j < len(spar):
-						w[key] = spar[j]
-						j += 1
-					else:
-						w[key] = STYLE_SPECS[s][pnames[i]]
-				i += 1
-		except Exception as e:
-			print('getPolulatedWrap(): Style {:s} does not exist ({:s})'.format(s, str(e)))
-			pass
-	return w
-
-def processStyle(style, wrap):
-	for s in style:
-		try:
-			#print(s)
-			STYLE_FUNCS[s.split('(')[0]](wrap)
-		except Exception as e:
-			print('processStyle(): Style {:s} does not exist ({:s})'.format(s, str(e)))
-			pass
-
-
-def moving_average_2d(data, window):
-    """Moving average on two-dimensional data.
-    """
-    # Makes sure that the window function is normalized.
-    window /= window.sum()
-    # Makes sure data array is a numpy array or masked array.
-    if type(data).__name__ not in ['ndarray', 'MaskedArray']:
-        data = np.asarray(data)
-
-    # The output array has the same dimensions as the input data
-    # (mode='same') and symmetrical boundary conditions are assumed
-    # (boundary='symm').
-    return signal.convolve2d(data, window, mode='same', boundary='symm')

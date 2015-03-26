@@ -159,7 +159,7 @@ def parseUnitAndNameFromColumnName(input):
 	z = reg.findall(input)
 	return z
 
-def scanplot(file,fig=None,n_index=None,style='',data=None,**kwargs):
+def scanplot(file, fig=None, n_index=None, style=[], data=None, **kwargs):
 	#kwargs go into matplotlib/pyplot plot command
 	if not fig:
 		fig = plt.figure()
@@ -208,7 +208,8 @@ def scanplot(file,fig=None,n_index=None,style='',data=None,**kwargs):
 		wrap = tstyle.getEmptyWrap()
 		#put in the last column, the 'measured' value so to say
 		wrap['XX'] = filtereddata.iloc[:,-1]
-		tstyle.processStyle(style,wrap)
+		for st in style:
+			st.execute(wrap)
 
 		p = plt.plot(filtereddata.iloc[:,-2],wrap['XX'],label=title,**kwargs)
 
@@ -333,7 +334,7 @@ class plot3DSlices:
 
 
 
-	def __init__(self,data,n_index=None,meshgrid=False,hilbert=False,didv=False,fiddle=True,uniques_col_str=[],style='normal',clim=(0,0),aspect='auto',interpolation='none'):
+	def __init__(self, data, n_index=None, meshgrid=False, hilbert=False, didv=False, fiddle=True, uniques_col_str=[], style=[], clim=(0,0), aspect='auto', interpolation='none'):
 		#uniques_col_str, array of names of the columns that are e.g. the slices of the
 		#style, 'normal,didv,didv2,log'
 		#clim, limits of the colorplot c axis
@@ -481,12 +482,8 @@ class plot3DSlices:
 			ax = plt.subplot(nplots, 1, cnt+1)
 			cbar_title = ''
 
-			if didv: #some backwards compatibility
-			   style = 'didv'
-
 			if type(style) != list:
 				style = list([style])
-				#print(style)
 
 			#smooth the datayesplz
 			#import scipy.ndimage as ndimage
@@ -499,11 +496,9 @@ class plot3DSlices:
 			cbar_unit = measAxisDesignation[1]
 			cbar_trans = [] #trascendental tracer :P For keeping track of logs and stuff
 
-			w = tstyle.getPopulatedWrap(style)
-			w2 = {'ext':ext, 'ystep':ystep,'XX': XX, 'cbar_quantity': cbar_quantity, 'cbar_unit': cbar_unit, 'cbar_trans':cbar_trans}
-			for k in w2:
-				w[k] = w2[k]
-			tstyle.processStyle(style, w)
+			w = {'ext':ext, 'ystep':ystep,'XX': XX, 'cbar_quantity': cbar_quantity, 'cbar_unit': cbar_unit, 'cbar_trans':cbar_trans, 'flipaxes': False, 'has_title': True}
+			for st in style:
+				st.execute(w)
 
 			#unwrap
 			ext = w['ext']
@@ -516,7 +511,7 @@ class plot3DSlices:
 			#postrotate np.rot90
 			XX = np.rot90(XX)
 
-			if 'deinterlace' in style:
+			if 'deinterXXodd' in w: # If deinterlace style is used
 				self.fig = plt.figure()
 				ax_deinter_odd  = plt.subplot(2, 1, 1)
 				w['deinterXXodd'] = np.rot90(w['deinterXXodd'])
@@ -530,7 +525,7 @@ class plot3DSlices:
 			if clim != (0,0):
 			   self.im.set_clim(clim)
 
-			if 'flipaxes' in style:
+			if w['flipaxes']:
 				ax.set_xlabel(cols[-2])
 				ax.set_ylabel(cols[-3])
 			else:
@@ -542,7 +537,7 @@ class plot3DSlices:
 			for i in uniques_col_str:
 				title = '\n'.join([title, '{:s}: {:g} (mV)'.format(i,getattr(slicy,i).iloc[0])])
 			print(title)
-			if 'notitle' not in style:
+			if w['has_title']:
 				ax.set_title(title)
 			# create an axes on the right side of ax. The width of cax will be 5%
 			# of ax and the padding between cax and ax will be fixed at 0.05 inch.
