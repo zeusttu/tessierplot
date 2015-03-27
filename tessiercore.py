@@ -29,17 +29,23 @@ def loadCustomColormap(file='./cube1.xls'):
 
 
 def buildLogicals(xs):
-#combine the logical uniques of each column into boolean index over those columns
-#infers that each column has
-#like
-# 1, 3
-# 1, 4
-# 1, 5
-# 2, 3
-# 2, 4
-# 2, 5
-#uniques of first column [1,2], second column [3,4,5]
-#go through list and recursively combine all unique values
+	'''
+	Find the number of unique values per step value column and yield an
+	iterator over all combinations.
+	
+	Old docstring:
+	combine the logical uniques of each column into boolean index over those columns
+	infers that each column has
+	like
+	 1, 3
+	 1, 4
+	 1, 5
+	 2, 3
+	 2, 4
+	 2, 5
+	uniques of first column [1,2], second column [3,4,5]
+	go through list and recursively combine all unique values
+	'''
 	if len(xs) > 1:
 		for i in xs[0].unique():
 			if np.isnan(i):
@@ -63,11 +69,12 @@ class Plot3DSlices:
 	uniques_col_str=None
 	exportData = []
 	exportDataMeta =[]
+	
 	def show(self):
 		plt.show()
 
 	def exportToMtx(self):
-
+		'''Export data to .mtx file'''
 		for j, i in enumerate(self.exportData):
 
 			data = i
@@ -107,36 +114,37 @@ class Plot3DSlices:
 
 
 
-	def __init__(self, data, n_index=None, meshgrid=False, hilbert=False, didv=False, fiddle=True, uniques_col_str=[], style=[], clim=(0,0), aspect='auto', interpolation='none'):
-		#uniques_col_str, array of names of the columns that are e.g. the slices of the
-		#style, 'normal,didv,didv2,log'
-		#clim, limits of the colorplot c axis
-
+	def __init__(self, data, n_index=None, meshgrid=False, hilbert=False, fiddle=True, uniques_col_str=[], style=[], clim=None, aspect='auto', interpolation='none'):
+		'''
+		Constructor. Parameters:
+			data: the measured data to plot (already read from file)
+			n_index: which plot to plot (for which value of stepval columns I think), None for all
+			meshgrid: I have no idea
+			hilbert: True if the measurement was done in Hilbert space
+			fiddle: True if you want an interactive fiddle control
+			uniques_col_str: names of step value columns (I think)
+			style: TessierStyles to apply
+			clim: color limits (TODO deprecate and replace with a style)
+			aspect: I have no idea
+			interpolation: I have no idea
+		'''
 		self.exportData =[]
 		self.data = data
-		self.uniques_col_str=uniques_col_str
-
-		#n_index determines which plot to plot,
-		# 0 value for plotting all
-		
-		
 
 		print('sorting...')
-		cols = data.columns.tolist()
-		filterdata = data.sort(cols[:-1])
-		filterdata = filterdata.dropna(how='any')
+		self.cols = data.columns.tolist()
+		self.filterdata = data.sort(self.cols[:-1]).dropna(how='any')
 
-		uniques_col = []
+		self.uniques_col = []
 		self.uniques_per_col=[]
-		
-		
-		sweepdirection = data[cols[-1]][0] > data[cols[-1]][1] #True is sweep neg to pos
 
+		#True is sweep neg to pos
+		self.sweepdirection = data[self.cols[-1]][0] > data[self.cols[-1]][1]
 
-		uniques_col_str = list(uniques_col_str)
-		for i in uniques_col_str:
-			col = getattr(filterdata,i)
-			uniques_col.append(col)
+		self.uniques_col_str = list(uniques_col_str)
+		for i in self.uniques_col_str:
+			col = getattr(filterdata, i)
+			self.uniques_col.append(col)
 			self.uniques_per_col.append(list(col.unique()))
 
 		self.ccmap = loadCustomColormap()
@@ -146,195 +154,199 @@ class Plot3DSlices:
 		self.fig = plt.figure()
 		self.fig.subplots_adjust(top=0.96, bottom=0.03, left=0.1, right=0.9,hspace=0.0)
 
-
-		nplots = 1
-		for i in self.uniques_per_col:
-			nplots *= len(i)
-
-		if n_index != None:
+		if n_index is None:
+			self.nplots = np.product(self.uniques_per_col)
+		else:
 			n_index = np.array(n_index)
-			nplots = len(n_index)
-			
+			self.nplots = len(n_index)
 
 		cnt=0
 		#enumerate over the generated list of unique values specified in the uniques columns
 		for j,ind in enumerate(buildLogicals(uniques_col)):
-			if n_index != None:
-				if j not in n_index:
-					continue
+			if n_index is None or j in n_index:
+				self.create_subplot(cnt, ind, hilbert, style, clim)
+				cnt += 1
 
-			slicy = filterdata.loc[ind]
-			#get all the last columns, that we assume contains the to be plotted data
-			x=slicy.iloc[:,-3]
-			y=slicy.iloc[:,-2]
-			z=slicy.iloc[:,-1]
-
-			xu = np.size(x.unique())
-			yu = np.size(y.unique())
+		if mpl.get_backend() == 'Qt4Agg':
+			from IPython.core import display
+			display.display(self.fig)
+			if fiddle:
+				self.add_fiddle()
 
 
-			## if the measurement is not complete this will probably fail so trim of the final sweep?
-			print('xu: {:d}, yu: {:d}, lenz: {:d}'.format(xu,yu,len(z)))
+	def create_subplot(self, cnt, ind, hilbert, style, clim):
+		'''
+		Create one of the subplots of this plot.
+		Parameters:
+			cnt: subplot index
+			ind: stepval uniques index
+			hilbert: True if measurement was done in Hilbert space
+			style: list of TessierStyles to apply
+			clim: colorbar limits (TODO turn this into a style)
+		'''
+		slicy = self.filterdata.loc[ind]
 
-			if xu*yu != len(z):
-				xu = (len(z) / yu) #dividing integers so should automatically floor the value
+		#get all the last columns, that we assume contains the to be plotted data
+		x=slicy.iloc[:,-3]
+		y=slicy.iloc[:,-2]
+		z=slicy.iloc[:,-1]
 
-			#trim the first part of the sweep, for different min max, better to trim last part?
-			#or the first since there has been sorting
-			#this doesnt work for e.g. a hilbert measurement
+		xu = np.size(x.unique())
+		yu = np.size(y.unique())
 
-			print('xu: {:d}, yu: {:d}, lenz: {:d}'.format(xu,yu,len(z)))
-			if hilbert:
+		## if the measurement is not complete this will probably fail so trim of the final sweep?
+		print('xu: {:d}, yu: {:d}, len(z): {:d}'.format(xu, yu, len(z)))
 
-				Z = np.zeros((xu,yu))
+		if xu * yu != len(z):
+			xu = (len(z) / yu) #dividing integers so should automatically floor the value
+			print('xu: {:d}, yu: {:d}, len(z): {:d}'.format(xu, yu, len(z)))
 
-				#make a meshgrid for indexing
-				xs = np.linspace(x.min(),x.max(),xu)
-				ys = np.linspace(y.min(),y.max(),yu)
-				xv,yv = np.meshgrid(xs,ys,sparse=True)
-				#evaluate all datapoints
-				for i,k in enumerate(xs):
-					print(i,k)
-					for j,l in enumerate(ys):
-						ind = (k == x) & (l == y)
-						#print(z[ind.index[0]])
-						Z[i,j] = z[ind.index[0]]
-				#keep a z array, index with datapoints from meshgrid+eval
-				XX = Z
+		#trim the first part of the sweep, for different min max, better to trim last part?
+		#or the first since there has been sorting
+		#this doesnt work for e.g. a hilbert measurement
+
+		if hilbert:
+			Z = np.zeros((xu,yu))
+
+			#make a meshgrid for indexing
+			xs = np.linspace(x.min(),x.max(),xu)
+			ys = np.linspace(y.min(),y.max(),yu)
+			xv,yv = np.meshgrid(xs,ys,sparse=True)
+			#evaluate all datapoints
+			for i,k in enumerate(xs):
+				print(i,k)
+				for j,l in enumerate(ys):
+
+					ind = (k == x) & (l == y)
+					#print(z[ind.index[0]])
+					Z[i,j] = z[ind.index[0]]
+			#keep a z array, index with datapoints from meshgrid+eval
+			XX = Z
+		else:
+			#sorting sorts negative to positive, so beware:
+			#sweep direction determines which part of array should be cut off
+			if sweepdirection:
+				z = z[-xu*yu:]
+				x = x[-xu*yu:]
+				y = y[-xu*yu:]
 			else:
-				#sorting sorts negative to positive, so beware:
-				#sweep direction determines which part of array should be cut off
-				if sweepdirection:
-					z = z[-xu*yu:]
-					x = x[-xu*yu:]
-					y = y[-xu*yu:]
-				else:
-					z = z[:xu*yu]
-					x = x[:xu*yu]
-					y = y[:xu*yu]
+				z = z[:xu*yu]
+				x = x[:xu*yu]
+				y = y[:xu*yu]
 
-				XX = np.reshape(z,(xu,yu))
+			XX = np.reshape(z,(xu,yu))
 
-			self.x = x
-			self.y = y
-			self.z = z
-			#now set the lims
-			xlims = (x.min(),x.max())
-			ylims = (y.min(),y.max())
+		self.x = x
+		self.y = y
+		self.z = z
+		#now set the lims
+		xlims = (x.min(),x.max())
+		ylims = (y.min(),y.max())
 
-			#determine stepsize for di/dv, inprincipe only y step is used (ie. the diff is also taken in this direction and the measurement swept..)
-			xstep = (xlims[0] - xlims[1])/xu
-			ystep = (ylims[0] - ylims[1])/yu
-			ext = xlims+ylims
-
+		#determine stepsize for di/dv, inprincipe only y step is used (ie. the diff is also taken in this direction and the measurement swept..)
+		xstep = (xlims[0] - xlims[1])/xu
+		ystep = (ylims[0] - ylims[1])/yu
+		ext = xlims+ylims
 
 #             if meshgrid:
 #                 X, Y = np.meshgrid(xi, yi)
 #                 scipy.interpolate.griddata((xs, ys), Z, X, Y)
 #                 Z = griddata(x,y,Z,xi,yi)
 
-			self.XX = XX
+		self.XX = XX
 
-			self.exportData.append(XX)
-			try:
-				m={
-					'xu':xu,
-					'yu':yu,
-					'xlims':xlims,
-					'ylims':ylims,
-					'zlims':(0,0),
-					'xname':cols[-3],
-					'yname':cols[-2],
-					'zname':'unused',
-					'datasetname':data.name}
-				self.exportDataMeta = np.append(self.exportDataMeta,m)
-			except:
-				pass
-			print('plotting...')
+		self.exportData.append(XX)
+		try:
+			m={
+				'xu': xu,
+				'yu': yu,
+				'xlims': xlims,
+				'ylims': ylims,
+				'zlims': (0,0),
+				'xname': self.cols[-3],
+				'yname': self.cols[-2],
+				'zname': 'unused',
+				'datasetname': data.name}
+			self.exportDataMeta = np.append(self.exportDataMeta, m)
+		except:
+			pass
+		print('plotting...')
 
-			ax = plt.subplot(nplots, 1, cnt+1)
-			cbar_title = ''
+		ax = plt.subplot(nplots, 1, cnt + 1)
+		cbar_title = ''
 
-			if type(style) != list:
-				style = list([style])
+		if type(style) != list:
+			style = list([style])
 
-			#smooth the datayesplz
-			#import scipy.ndimage as ndimage
-			#XX = ndimage.gaussian_filter(XX,sigma=1.0,order=0)
+		# smooth the datayesplz
+		#import scipy.ndimage as ndimage
+		#XX = ndimage.gaussian_filter(XX,sigma=1.0,order=0)
+		# Maybe make a TessierStyle for this
 
+		measAxisDesignation = parseUnitAndNameFromColumnName(self.data.keys()[-1])
+		#wrap all needed arguments in a datastructure
+		cbar_quantity = measAxisDesignation[0]
+		cbar_unit = measAxisDesignation[1]
+		cbar_trans = [] #trascendental tracer :P For keeping track of logs and stuff
 
-			measAxisDesignation = parseUnitAndNameFromColumnName(self.data.keys()[-1])
-			#wrap all needed arguments in a datastructure
-			cbar_quantity = measAxisDesignation[0]
-			cbar_unit = measAxisDesignation[1]
-			cbar_trans = [] #trascendental tracer :P For keeping track of logs and stuff
+		w = tstyle.TessierWrap(
+				ext=ext, ystep=ystep, XX=XX, cbar_quantity=cbar_quantity,
+				cbar_unit=cbar_unit, cbar_trans=cbar_trans,
+				flipaxes=False, has_title=True)
+		for st in style:
+			st.execute(w)
 
-			w = tstyle.TessierWrap(
-					ext=ext, ystep=ystep, XX=XX, cbar_quantity=cbar_quantity,
-					cbar_unit=cbar_unit, cbar_trans=cbar_trans,
-					flipaxes=False, has_title=True)
-			for st in style:
-				st.execute(w)
+		#unwrap
+		ext = w.ext
+		XX = w.XX
+		cbar_trans_formatted = ''.join([''.join(s+'(') for s in w.cbar_trans])
+		cbar_title = cbar_trans_formatted + w.cbar_quantity + ' (' + w.cbar_unit + ')'
+		if len(w.cbar_trans) is not 0:
+			cbar_title += ')'
 
-			#unwrap
-			ext = w.ext
-			XX = w.XX
-			cbar_trans_formatted = ''.join([''.join(s+'(') for s in w.cbar_trans])
-			cbar_title = cbar_trans_formatted + w.cbar_quantity + ' (' + w.cbar_unit + ')'
-			if len(w.cbar_trans) is not 0:
-				cbar_title = cbar_title + ')'
+		#postrotate np.rot90
+		XX = np.rot90(XX)
 
-			#postrotate np.rot90
-			XX = np.rot90(XX)
+		if w.deinterlace: # If deinterlace style is used
+			self.fig = plt.figure()
+			ax_deinter_odd  = plt.subplot(2, 1, 1)
+			w.deinterXXodd = np.rot90(w.deinterXXodd)
+			ax_deinter_odd.imshow(w.deinterXXodd,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
 
-			if 'deinterXXodd' in w: # If deinterlace style is used
-				self.fig = plt.figure()
-				ax_deinter_odd  = plt.subplot(2, 1, 1)
-				w.deinterXXodd = np.rot90(w.deinterXXodd)
-				ax_deinter_odd.imshow(w.deinterXXodd,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
+			ax_deinter_even = plt.subplot(2, 1, 2)
+			w.deinterXXeven = np.rot90(w.deinterXXeven)
+			ax_deinter_even.imshow(w.deinterXXeven,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
 
-				ax_deinter_even = plt.subplot(2, 1, 2)
-				w.deinterXXeven = np.rot90(w.deinterXXeven)
-				ax_deinter_even.imshow(w.deinterXXeven,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
+		self.im = ax.imshow(XX, extent=ext, cmap=plt.get_cmap(self.ccmap), aspect=aspect, interpolation=interpolation, norm=w.imshow_norm, clim=clim)
 
-			self.im = ax.imshow(XX,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation, norm=w.imshow_norm)
-			if clim != (0,0):
-			   self.im.set_clim(clim)
-
-			if w.flipaxes:
-				ax.set_xlabel(cols[-2])
-				ax.set_ylabel(cols[-3])
-			else:
-				ax.set_xlabel(cols[-3])
-				ax.set_ylabel(cols[-2])
+		if w.flipaxes:
+			ax.set_xlabel(cols[-2])
+			ax.set_ylabel(cols[-3])
+		else:
+			ax.set_xlabel(cols[-3])
+			ax.set_ylabel(cols[-2])
 
 
-			title = ''
-			for i in uniques_col_str:
-				title = '\n'.join([title, '{:s}: {:g} (mV)'.format(i,getattr(slicy,i).iloc[0])])
-			print(title)
-			if w.has_title:
-				ax.set_title(title)
-			# create an axes on the right side of ax. The width of cax will be 5%
-			# of ax and the padding between cax and ax will be fixed at 0.05 inch.
-			divider = make_axes_locatable(ax)
-			cax = divider.append_axes("right", size="5%", pad=0.05)
+		title = ''
+		for i in self.uniques_col_str:
+			title = '\n'.join([title, '{:s}: {:g} (mV)'.format(i,getattr(slicy,i).iloc[0])])
+		print(title)
+		if w.has_title:
+			ax.set_title(title)
+		# create an axes on the right side of ax. The width of cax will be 5%
+		# of ax and the padding between cax and ax will be fixed at 0.05 inch.
+		divider = make_axes_locatable(ax)
+		cax = divider.append_axes("right", size="5%", pad=0.05)
 
-			pos = list(ax.get_position().bounds)
+		pos = list(ax.get_position().bounds)
 
-			self.cbar = plt.colorbar(self.im, cax=cax)
-			cbar = self.cbar
+		self.cbar = plt.colorbar(self.im, cax=cax)
+		cbar = self.cbar
 
-			cbar.set_label(cbar_title)
+		cbar.set_label(cbar_title)
 
-			cnt+=1 #counter for subplots
-
-
-		if mpl.get_backend() == 'Qt4Agg':
-			from IPython.core import display
-			display.display(self.fig)
-
-		if fiddle and (mpl.get_backend() == 'Qt4Agg'):
+	def add_fiddle(self):
+		
 			self.fiddle = Fiddle(self.fig)
 			axFiddle = plt.axes([0.1, 0.85, 0.15, 0.075])
 
@@ -345,5 +357,4 @@ class Plot3DSlices:
 			#attach to the relevant figure to make sure the object does not go out of scope
 			self.fig.fiddle = self.fiddle
 			self.fig.bnext = self.bnext
-		#plt.show()
 
