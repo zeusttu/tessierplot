@@ -16,7 +16,7 @@ import re
 
 import tessierstyles as tstyles
 import tessierstyle as tstyle
-from plot3dslices import Plot3DSlices, \
+from tessiercore import Plot3DSlices, \
 		buildLogicals, loadCustomColormap, parseUnitAndNameFromColumnName
 
 # Reload style modules, useful for debugging
@@ -52,8 +52,6 @@ def parseheader(file):
 def quickplot(file,**kwargs):
 	names,skipindex = parseheader(file)
 	data = loadFile(file,names=names,skiprows=skipindex)
-
-
 	p = Plot3DSlices(data,**kwargs)
 	return p
 
@@ -117,7 +115,7 @@ def scanplot(file, fig=None, n_index=None, style=[], data=None, **kwargs):
 	#display.display(fig)
 	return fig,data
 
-def loadFile(file,names=['L','B1','B2','vsd','zz'],skiprows=25):
+def loadFile(file, names=['L','B1','B2','vsd','zz'], skiprows=25):
 	#print('loading...')
 	data = pd.read_csv(file, sep='\t', comment='#',skiprows=skiprows,names=names)
 	data.name = file
@@ -130,10 +128,4 @@ def demoCustomColormap():
 	fig = plt.figure()
 	plt.imshow(a, aspect='auto', cmap=plt.get_cmap(ccmap), origin='lower')
 	plt.show()
-
-
-def moving_average(a, n=3) :
-	ret = np.cumsum(a, dtype=float)
-	ret[n:] = ret[n:] - ret[:-n]
-	return ret[n - 1:] / n
 	 
