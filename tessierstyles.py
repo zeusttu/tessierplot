@@ -8,8 +8,19 @@ import tessierstyle
 class Deinterlace(tessierstyle.TessierStyle):
 	'''Tessier style for deinterlacing a measurement'''
 	def wrapaction(self, w):
-		w.deinterXXodd = w.XX[1::2,1:]
-		w.deinterXXeven = w.XX[::2,:]
+		self.XXodd = np.rot90(w.XX[1::2,1:])
+		self.XXeven = np.rot90(w.XX[::2,:])
+
+	def axisaction(self, w, ax, tessierobj):
+		(self.fig, (self.ax_odd, self.ax_even)) = plt.subplots(2, 1)
+		self.im_odd = self.ax_odd.imshow(
+				self.XXodd, extent=w.ext, cmap=w.cmap,
+				aspect=w.aspect, interpolation=w.interpolation)
+		self.im_even = self.ax_even.imshow(
+				self.XXeven, extent=w.ext, cmap=w.cmap,
+				aspect=w.aspect, interpolation=w.interpolation)
+		if tessierobj is not None:
+			(tessierobj.fig, tessierobj.deinter) = (self.fig, self)
 
 
 class SmoothingFilter(tessierstyle.TessierStyle):
@@ -127,12 +138,17 @@ class Abs(tessierstyle.TessierStyle):
 		w.cbar_trans = ['abs'] + w.cbar_trans
 
 
-class Flipaxes(tessierstyle.TessierStyle):
+class FlipAxes(tessierstyle.TessierStyle):
 	'''Tessier style for flipping the X and Y axes'''
 	def wrapaction(self, w):
 		w.XX = np.transpose( w.XX)
 		w.ext = (w.ext[2],w.ext[3],w.ext[0],w.ext[1])
 		w.flipaxes = True
+
+	def axisaction(self, w, ax, tessierobj):
+		(xlbl, ylbl) = (ax.get_ylabel(), ax.get_xlabel())
+		ax.set_xlabel(xlbl)
+		ax.set_ylabel(ylbl)
 
 
 class NoTitle(tessierstyle.TessierStyle):

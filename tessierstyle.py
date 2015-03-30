@@ -57,7 +57,8 @@ class TessierWrap:
 				'ext':(0,0,0,0), 'ystep':1, 'XX': [], 'cbar_quantity': '',
 				'cbar_unit': 'a.u.', 'cbar_trans': [], 'imshow_norm': None,
 				'flipaxes': False, 'has_title': True, 'deinterlace': False,
-				'aspect': 'auto', 'interpolation': 'none', 'cmap': None})
+				'aspect': 'auto', 'interpolation': 'none', 'cmap': None,
+				'cols': []})
 		# Values passed to constructor (optional)
 		self.__dict__.update(kwargs)
 

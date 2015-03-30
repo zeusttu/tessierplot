@@ -224,7 +224,7 @@ class Plot3DSlices:
 					#print(z[ind.index[0]])
 					Z[i,j] = z[ind.index[0]]
 			#keep a z array, index with datapoints from meshgrid+eval
-			XX = Z
+			self.XX = Z
 		else:
 			#sorting sorts negative to positive, so beware:
 			#sweep direction determines which part of array should be cut off
@@ -237,7 +237,7 @@ class Plot3DSlices:
 				x = x[:xu*yu]
 				y = y[:xu*yu]
 
-			XX = np.reshape(z,(xu,yu))
+			self.XX = np.reshape(z,(xu,yu))
 
 		self.x = x
 		self.y = y
@@ -249,16 +249,13 @@ class Plot3DSlices:
 		#determine stepsize for di/dv, inprincipe only y step is used (ie. the diff is also taken in this direction and the measurement swept..)
 		xstep = (xlims[0] - xlims[1])/xu
 		ystep = (ylims[0] - ylims[1])/yu
-		ext = xlims+ylims
 
 #             if meshgrid:
 #                 X, Y = np.meshgrid(xi, yi)
 #                 scipy.interpolate.griddata((xs, ys), Z, X, Y)
 #                 Z = griddata(x,y,Z,xi,yi)
 
-		self.XX = XX
-
-		self.exportData.append(XX)
+		self.exportData.append(self.XX)
 		try:
 			m={
 				'xu': xu,
@@ -293,43 +290,32 @@ class Plot3DSlices:
 		cbar_trans = [] # trascendental tracer :P For keeping track of logs and stuff
 
 		w = tstyle.TessierWrap(
-				ext=ext, ystep=ystep, XX=XX, cbar_quantity=cbar_quantity,
-				cbar_unit=cbar_unit, cbar_trans=cbar_trans,
-				flipaxes=False, has_title=True, aspect=aspect,
-				interpolation=interpolation, cmap=plt.get_cmap(self.ccmap))
+				ext=xlims+ylims, ystep=ystep, XX=self.XX,
+				cbar_quantity=cbar_quantity, cbar_unit=cbar_unit,
+				cbar_trans=cbar_trans, flipaxes=False, has_title=True,
+				aspect=aspect, interpolation=interpolation,
+				cmap=plt.get_cmap(self.ccmap), cols = self.cols)
 		for st in style:
 			st.apply_to_wrap(w)
 
 		#unwrap
-		ext = w.ext
-		XX = w.XX
 		cbar_trans_formatted = ''.join([''.join(s+'(') for s in w.cbar_trans])
 		cbar_title = cbar_trans_formatted + w.cbar_quantity + ' (' + w.cbar_unit + ')'
 		if len(w.cbar_trans) is not 0:
 			cbar_title += ')'
 
 		#postrotate np.rot90
-		XX = np.rot90(XX)
+		XX = np.rot90(w.XX)
 
-		if w.deinterlace: # If deinterlace style is used
-			self.fig = plt.figure()
-			ax_deinter_odd  = plt.subplot(2, 1, 1)
-			w.deinterXXodd = np.rot90(w.deinterXXodd)
-			ax_deinter_odd.imshow(w.deinterXXodd,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
+		self.im = ax.imshow(
+				XX, extent=w.ext, cmap=plt.get_cmap(self.ccmap), aspect=aspect,
+				interpolation=interpolation, norm=w.imshow_norm, clim=clim)
 
-			ax_deinter_even = plt.subplot(2, 1, 2)
-			w.deinterXXeven = np.rot90(w.deinterXXeven)
-			ax_deinter_even.imshow(w.deinterXXeven,extent=ext, cmap=plt.get_cmap(self.ccmap),aspect=aspect,interpolation=interpolation)
-
-		self.im = ax.imshow(XX, extent=ext, cmap=plt.get_cmap(self.ccmap), aspect=aspect, interpolation=interpolation, norm=w.imshow_norm, clim=clim)
-
-		if w.flipaxes:
-			ax.set_xlabel(cols[-2])
-			ax.set_ylabel(cols[-3])
-		else:
-			ax.set_xlabel(cols[-3])
-			ax.set_ylabel(cols[-2])
-
+		ax.set_xlabel(self.cols[-3])
+		ax.set_ylabel(self.cols[-2])
+		
+		for st in style:
+			st.apply_to_axis(w, ax, self)
 
 		title = ''
 		for i in self.uniques_col_str:
