@@ -174,7 +174,8 @@ class Plot3DSlices:
 				self.add_fiddle()
 
 
-	def create_subplot(self, cnt, ind, hilbert, style, clim):
+	def create_subplot(
+			self, cnt, ind, hilbert, style, clim, aspect, interpolation):
 		'''
 		Create one of the subplots of this plot.
 		Parameters:
@@ -183,6 +184,8 @@ class Plot3DSlices:
 			hilbert: True if measurement was done in Hilbert space
 			style: list of TessierStyles to apply
 			clim: colorbar limits (TODO turn this into a style)
+			aspect: no idea
+			interpolation: no idea
 		'''
 		slicy = self.filterdata.loc[ind]
 
@@ -284,15 +287,16 @@ class Plot3DSlices:
 		# Maybe make a TessierStyle for this
 
 		measAxisDesignation = parseUnitAndNameFromColumnName(self.data.keys()[-1])
-		#wrap all needed arguments in a datastructure
+		# wrap all needed arguments in a datastructure
 		cbar_quantity = measAxisDesignation[0]
 		cbar_unit = measAxisDesignation[1]
-		cbar_trans = [] #trascendental tracer :P For keeping track of logs and stuff
+		cbar_trans = [] # trascendental tracer :P For keeping track of logs and stuff
 
 		w = tstyle.TessierWrap(
 				ext=ext, ystep=ystep, XX=XX, cbar_quantity=cbar_quantity,
 				cbar_unit=cbar_unit, cbar_trans=cbar_trans,
-				flipaxes=False, has_title=True)
+				flipaxes=False, has_title=True, aspect=aspect,
+				interpolation=interpolation, cmap=plt.get_cmap(self.ccmap))
 		for st in style:
 			st.apply_to_wrap(w)
 
@@ -346,15 +350,14 @@ class Plot3DSlices:
 		cbar.set_label(cbar_title)
 
 	def add_fiddle(self):
-		
-			self.fiddle = Fiddle(self.fig)
-			axFiddle = plt.axes([0.1, 0.85, 0.15, 0.075])
+		'''Add a fiddle handler and fiddle-enabling button'''
+		self.fiddle = Fiddle(self.fig)
+		axFiddle = plt.axes([0.1, 0.85, 0.15, 0.075])
 
+		self.bnext = Button(axFiddle, 'Fiddle')
+		self.bnext.on_clicked(self.fiddle.connect)
 
-			self.bnext = Button(axFiddle, 'Fiddle')
-			self.bnext.on_clicked(self.fiddle.connect)
-
-			#attach to the relevant figure to make sure the object does not go out of scope
-			self.fig.fiddle = self.fiddle
-			self.fig.bnext = self.bnext
+		#attach to the relevant figure to make sure the object does not go out of scope
+		self.fig.fiddle = self.fiddle
+		self.fig.bnext = self.bnext
 
