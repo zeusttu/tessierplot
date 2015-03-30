@@ -105,7 +105,7 @@ def scanplot(file, fig=None, n_index=None, style=[], data=None, **kwargs):
 		# put in the last column, the 'measured' value so to say
 		wrap.XX = filtereddata.iloc[:,-1]
 		for st in style:
-			st.execute(wrap)
+			st.apply_to_wrap(wrap)
 
 		p = plt.plot(filtereddata.iloc[:,-2],wrap.XX,label=title,**kwargs)
 

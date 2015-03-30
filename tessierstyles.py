@@ -7,7 +7,7 @@ import tessierstyle
 
 class Deinterlace(tessierstyle.TessierStyle):
 	'''Tessier style for deinterlacing a measurement'''
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.deinterXXodd = w.XX[1::2,1:]
 		w.deinterXXeven = w.XX[::2,:]
 
@@ -21,7 +21,7 @@ class SmoothingFilter(tessierstyle.TessierStyle):
 		self.mode = mode
 		self.boundary = boundary
 
-	def exe(self, w):
+	def wrapaction(self, w):
 		XX = w.XX
 		if type(XX) not in (np.ndarray, np.ma.core.MaskedArray):
 			XX = np.asarray(XX)
@@ -40,7 +40,7 @@ class SavGol(tessierstyle.TessierStyle):
 	def __init__(self, samples=3, order=1):
 		(self.samples, self.order) = (int(samples), int(order))
 
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = signal.savgol_filter(w.XX, self.samples, self.order)
 
 
@@ -51,7 +51,7 @@ class DIDV(tessierstyle.TessierStyle):
 		(self.axis, self.scale, self.quantity, self.unit) = (
 				axis, float(scale), quantity, unit)
 
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = np.diff(w.XX, axis=self.axis) * self.scale / w.ystep
 		(w.cbar_quantity, w.cbar_unit) = (self.quantity, self.unit)
 
@@ -70,7 +70,7 @@ class Logscale(tessierstyle.TessierStyle):
 	Tessier style for taking the base-10 logarithm of the absolute value
 	of each value
 	'''
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = np.log10(np.abs(w.XX))
 		w.cbar_trans = ['log$_{10}$','abs'] + w.cbar_trans
 
@@ -109,7 +109,7 @@ class FancyLogscale(tessierstyle.TessierStyle):
 					nzm = x[i]
 		return nzm
 
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = abs(w.XX)
 		if self.cmin is None:
 			self.cmin = w.XX.min()
@@ -122,14 +122,14 @@ class FancyLogscale(tessierstyle.TessierStyle):
 
 class Abs(tessierstyle.TessierStyle):
 	'''Tessier style for taking the absolute value of each value'''
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = np.abs(w.XX)
 		w.cbar_trans = ['abs'] + w.cbar_trans
 
 
 class Flipaxes(tessierstyle.TessierStyle):
 	'''Tessier style for flipping the X and Y axes'''
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.XX = np.transpose( w.XX)
 		w.ext = (w.ext[2],w.ext[3],w.ext[0],w.ext[1])
 		w.flipaxes = True
@@ -137,6 +137,6 @@ class Flipaxes(tessierstyle.TessierStyle):
 
 class NoTitle(tessierstyle.TessierStyle):
 	'''Style to not display a title'''
-	def exe(self, w):
+	def wrapaction(self, w):
 		w.has_title = False
 

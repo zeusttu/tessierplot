@@ -30,8 +30,8 @@ def loadCustomColormap(file='./cube1.xls'):
 
 def buildLogicals(xs):
 	'''
-	Find the number of unique values per step value column and yield an
-	iterator over all combinations.
+	Yield an iterator over all unique combinations of values of stepped
+	quantities.
 	
 	Old docstring:
 	combine the logical uniques of each column into boolean index over those columns
@@ -294,7 +294,7 @@ class Plot3DSlices:
 				cbar_unit=cbar_unit, cbar_trans=cbar_trans,
 				flipaxes=False, has_title=True)
 		for st in style:
-			st.execute(w)
+			st.apply_to_wrap(w)
 
 		#unwrap
 		ext = w.ext
