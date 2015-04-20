@@ -41,7 +41,7 @@ class TessierStyle:
 		override axisaction() instead.
 		'''
 		if isinstance(w, TessierWrap) and isinstance(ax, Axes):
-			self.axisaction(w, ax)
+			self.axisaction(w, ax, tessierobj)
 		else:
 			raise TypeError(
 					'{:} is no TessierWrap but a {:} '
