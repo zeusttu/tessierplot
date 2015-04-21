@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 from scipy import signal
 import matplotlib.colors as mplc
 
@@ -156,3 +157,25 @@ class NoTitle(tessierstyle.TessierStyle):
 	def wrapaction(self, w):
 		w.has_title = False
 
+
+class SubtractZeroBiasConductance(tessierstyle.TessierStyle):
+	'''Style to subtract zero-Vsd current offset for each gate voltage value'''
+	def __init__(self, axis=0):
+		self.axis = axis
+
+	def _I0_vec(self, XX):
+		if np.mod(XX.shape[0], 2):
+			return (self._I0_vec(XX[1:]) + self._I0_vec(XX[:-1])) / 2.
+		return XX[(XX.shape[0] - 1) / 2, :]
+
+	def _I0(self, XX, axis):
+		XX = copy.copy(XX)
+		if axis:
+			XX = XX.T
+		I0 = np.repeat([self._I0_vec(XX)], XX.shape[0], axis=0)
+		if axis:
+			I0 = I0.T
+		return I0
+
+	def wrapaction(self, w):
+		w.XX -= self._I0(w.XX, self.axis)
